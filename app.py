@@ -6,7 +6,6 @@ import numpy as np
 
 app = FastAPI()
 
-# اجازه اتصال از هر جای PWA
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,19 +13,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print("در حال بارگذاری مدل... (یک بار انجام میشود)")
-face_app = insightface.app.FaceAnalysis(name='buffalo_l')
+print("در حال بارگذاری مدل سبک...")
+face_app = insightface.app.FaceAnalysis(name='buffalo_s')
 face_app.prepare(ctx_id=-1, det_size=(640, 640))
 print("مدل آماده شد!")
 
 @app.post("/compare")
 async def compare(image1: UploadFile = File(...), image2: UploadFile = File(...)):
-    """
-    دو عکس دریافت میکند و نتیجه مقایسه را برمیگرداند.
-    خروجی دقیقاً مثل Face++ است: confidence و same_person
-    """
     try:
-        # خواندن عکسها
         data1 = await image1.read()
         data2 = await image2.read()
         
@@ -36,19 +30,15 @@ async def compare(image1: UploadFile = File(...), image2: UploadFile = File(...)
         if img1 is None or img2 is None:
             return {"error": "فرمت عکس معتبر نیست", "confidence": 0, "same_person": False}
         
-        # تشخیص چهره
         faces1 = face_app.get(img1)
         faces2 = face_app.get(img2)
         
-        # اگر هیچ چهرهای پیدا نشد
         if len(faces1) == 0 or len(faces2) == 0:
-            return {"error": "چهرهای در یکی از عکسها پیدا نشد", "confidence": 0, "same_person": False}
+            return {"error": "چهرهای پیدا نشد", "confidence": 0, "same_person": False}
         
-        # انتخاب بزرگترین چهره (مهمترین)
         face1 = max(faces1, key=lambda f: (f.bbox[2]-f.bbox[0])*(f.bbox[3]-f.bbox[1]))
         face2 = max(faces2, key=lambda f: (f.bbox[2]-f.bbox[0])*(f.bbox[3]-f.bbox[1]))
         
-        # محاسبه شباهت
         emb1 = face1.embedding
         emb2 = face2.embedding
         similarity = float(np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2)))
@@ -56,14 +46,12 @@ async def compare(image1: UploadFile = File(...), image2: UploadFile = File(...)
         
         return {
             "confidence": confidence,
-            "same_person": bool(confidence > 75),
-            "message": "مقایسه با موفقیت انجام شد"
+            "same_person": bool(confidence > 75)
         }
     
     except Exception as e:
         return {"error": str(e), "confidence": 0, "same_person": False}
 
-# مسیر تست (برای بررسی اینکه سرویس بالا است)
 @app.get("/")
 async def home():
     return {"status": "API فعال است"}
